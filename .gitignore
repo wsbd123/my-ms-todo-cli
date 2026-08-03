@@ -1,0 +1,39 @@
+# 依赖
+node_modules/
+package-lock.json
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# 构建产物
+*.tgz
+dist/
+build/
+
+# macOS
+.DS_Store
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# 日志
+*.log
+npm-debug.log*
+
+# 环境配置
+.env
+.env.local
+
+# 用户配置（不要提交用户的配置）
+.config/
+
+# 内部文档（可选，如果不想公开）
+COMPLETION_CHECKLIST.md
+DEVELOPMENT.md
+USER_OWNED_CREDENTIALS.md
