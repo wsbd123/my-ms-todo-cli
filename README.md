@@ -3,6 +3,7 @@
 > Agent-native command-line interface for Microsoft To Do
 
 [![npm version](https://badge.fury.io/js/ms-todo-cli.svg)](https://www.npmjs.com/package/ms-todo-cli)
+[![Downloads](https://img.shields.io/npm/dm/ms-todo-cli.svg)](https://www.npmjs.com/package/ms-todo-cli)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 A powerful CLI tool for managing Microsoft To Do tasks from your terminal. Perfect for automation, AI agents, and productivity workflows.
