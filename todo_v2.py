@@ -1001,6 +1001,14 @@ def cmd_task_update(args, token):
                        "reminderDateTime", "isReminderOn", "categories", "recurrence"]
     old_data = {k: current.get(k) for k in writable_fields if k in current}
 
+    # 原任务「本来就没有」的字段必须显式记成空值，否则撤销时 PATCH 里不含该键，
+    # Graph 保持现状 —— 「给任务新加截止日期」这类更新撤销后会静默无效。
+    for k in ("dueDateTime", "reminderDateTime", "recurrence"):
+        old_data.setdefault(k, None)
+    old_data.setdefault("categories", [])
+    if old_data.get("reminderDateTime") is None:
+        old_data["isReminderOn"] = False
+
     result = api(token, "PATCH", f"/me/todo/lists/{lst['id']}/tasks/{args.task_id}", update_data)
 
     if result:
