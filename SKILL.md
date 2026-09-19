@@ -123,6 +123,25 @@ python todo_v2.py task delete <task-id> --json
 # → {"id": "...", "status": "deleted"}
 ```
 
+### Subtask / Checklist
+
+```bash
+# 给任务添加子任务
+python todo_v2.py task checklist add <task-id> "子任务标题" --list "工作任务" --json
+# → {"id": "...", "displayName": "子任务标题", "isChecked": false}
+
+# 列出任务的子任务
+python todo_v2.py task checklist list <task-id> --json
+# → {"task_id": "...", "count": 2, "items": [{"id": "...", "displayName": "...", "isChecked": false}, ...]}
+
+# 勾选 / 取消勾选子任务
+python todo_v2.py task checklist check <task-id> <item-id> --json
+python todo_v2.py task checklist uncheck <task-id> <item-id> --json
+
+# 删除子任务
+python todo_v2.py task checklist delete <task-id> <item-id> --json
+```
+
 ### Batch Operations
 
 ```bash

@@ -140,6 +140,13 @@ mstodo task delete <task-id>
 # 将任务移动到另一个列表（参见下面关于 --list 的说明）
 mstodo task move <task-id> --from "Inbox" --to "Work"
 
+# 子任务 / 检查项
+mstodo task checklist add <task-id> "找房" --list "Work"
+mstodo task checklist list <task-id> --list "Work"
+mstodo task checklist check <task-id> <item-id>
+mstodo task checklist uncheck <task-id> <item-id>
+mstodo task checklist delete <task-id> <item-id>
+
 # 撤销最后一次的创建/更新/删除/完成/重新开启/移动/重命名操作
 mstodo undo
 ```

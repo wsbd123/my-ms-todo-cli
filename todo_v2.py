@@ -1128,6 +1128,99 @@ def cmd_task_delete(args, token):
         )
 
 # ═══════════════════════════════════════════════════════════════════════════════
+# 子任务（检查项 checklistItems）
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def _format_checklist_item(item: Dict) -> Dict:
+    """把 Graph 返回的 checklistItem 精简为统一输出结构"""
+    return {
+        "id": item.get("id"),
+        "displayName": item.get("displayName"),
+        "isChecked": item.get("isChecked", False),
+    }
+
+def cmd_checklist_add(args, token):
+    """给任务添加一个子任务（检查项）"""
+    lst = get_list_by_name(token, args.list)
+    if not lst:
+        return output_error("list_not_found", f"未找到列表「{args.list}」")
+
+    result = api(token, "POST",
+                 f"/me/todo/lists/{lst['id']}/tasks/{args.task_id}/checklistItems",
+                 {"displayName": args.title})
+
+    if result:
+        output_json(
+            _format_checklist_item(result),
+            f"✅ 已添加子任务「{result.get('displayName')}」"
+        )
+
+def cmd_checklist_list(args, token):
+    """列出任务的子任务"""
+    lst = get_list_by_name(token, args.list)
+    if not lst:
+        return output_error("list_not_found", f"未找到列表「{args.list}」")
+
+    result = api(token, "GET",
+                 f"/me/todo/lists/{lst['id']}/tasks/{args.task_id}/checklistItems")
+    if not result:
+        return
+
+    items = [_format_checklist_item(i) for i in result.get("value", [])]
+
+    output_json(
+        {"task_id": args.task_id, "count": len(items), "items": items},
+        f"共 {len(items)} 个子任务"
+    )
+
+def cmd_checklist_check(args, token):
+    """勾选子任务"""
+    lst = get_list_by_name(token, args.list)
+    if not lst:
+        return output_error("list_not_found", f"未找到列表「{args.list}」")
+
+    result = api(token, "PATCH",
+                 f"/me/todo/lists/{lst['id']}/tasks/{args.task_id}/checklistItems/{args.item_id}",
+                 {"isChecked": True})
+
+    if result:
+        output_json(
+            _format_checklist_item(result),
+            f"✅ 子任务已勾选"
+        )
+
+def cmd_checklist_uncheck(args, token):
+    """取消勾选子任务"""
+    lst = get_list_by_name(token, args.list)
+    if not lst:
+        return output_error("list_not_found", f"未找到列表「{args.list}」")
+
+    result = api(token, "PATCH",
+                 f"/me/todo/lists/{lst['id']}/tasks/{args.task_id}/checklistItems/{args.item_id}",
+                 {"isChecked": False})
+
+    if result:
+        output_json(
+            _format_checklist_item(result),
+            f"✅ 子任务已取消勾选"
+        )
+
+def cmd_checklist_delete(args, token):
+    """删除子任务"""
+    lst = get_list_by_name(token, args.list)
+    if not lst:
+        return output_error("list_not_found", f"未找到列表「{args.list}」")
+
+    result = api(token, "DELETE",
+                 f"/me/todo/lists/{lst['id']}/tasks/{args.task_id}/checklistItems/{args.item_id}")
+
+    if result:
+        output_json(
+            {"id": args.item_id, "status": "deleted"},
+            f"✅ 子任务已删除"
+        )
+
+# ═══════════════════════════════════════════════════════════════════════════════
 # 批量操作
 # ═══════════════════════════════════════════════════════════════════════════════
 
@@ -1673,6 +1766,34 @@ def main():
     p.add_argument("--list", "-l", default="Tasks", help="列表名称")
     p.add_argument("--yes", "-y", action="store_true", help="跳过确认")
 
+    # task checklist（子任务/检查项）
+    chk = task_sub.add_parser("checklist", help="子任务/检查项管理")
+    chk_sub = chk.add_subparsers(dest="checklist_cmd", help="检查项子命令")
+
+    p = chk_sub.add_parser("add", help="添加子任务")
+    p.add_argument("task_id", help="任务ID")
+    p.add_argument("title", help="子任务标题")
+    p.add_argument("--list", "-l", default="Tasks", help="列表名称")
+
+    p = chk_sub.add_parser("list", help="列出子任务")
+    p.add_argument("task_id", help="任务ID")
+    p.add_argument("--list", "-l", default="Tasks", help="列表名称")
+
+    p = chk_sub.add_parser("check", help="勾选子任务")
+    p.add_argument("task_id", help="任务ID")
+    p.add_argument("item_id", help="检查项ID")
+    p.add_argument("--list", "-l", default="Tasks", help="列表名称")
+
+    p = chk_sub.add_parser("uncheck", help="取消勾选子任务")
+    p.add_argument("task_id", help="任务ID")
+    p.add_argument("item_id", help="检查项ID")
+    p.add_argument("--list", "-l", default="Tasks", help="列表名称")
+
+    p = chk_sub.add_parser("delete", help="删除子任务")
+    p.add_argument("task_id", help="任务ID")
+    p.add_argument("item_id", help="检查项ID")
+    p.add_argument("--list", "-l", default="Tasks", help="列表名称")
+
     # ─────────────────────────────────────────────────────────────────────
     # 状态和同步
     # ─────────────────────────────────────────────────────────────────────
@@ -1734,16 +1855,35 @@ def main():
         "delete-all": cmd_task_delete_all,
     }
 
+    # checklist 子命令
+    checklist_command_map = {
+        "add": cmd_checklist_add,
+        "list": cmd_checklist_list,
+        "check": cmd_checklist_check,
+        "uncheck": cmd_checklist_uncheck,
+        "delete": cmd_checklist_delete,
+    }
+
     if args.cmd == "task":
         if not args.task_cmd:
             parser.parse_args(["task", "--help"])
             return
 
-        handler = task_command_map.get(args.task_cmd)
-        if handler:
-            handler(args, token)
+        if args.task_cmd == "checklist":
+            if not args.checklist_cmd:
+                parser.parse_args(["task", "checklist", "--help"])
+                return
+            handler = checklist_command_map.get(args.checklist_cmd)
+            if handler:
+                handler(args, token)
+            else:
+                return output_error("unknown_checklist_command", f"未知检查项命令: {args.checklist_cmd}")
         else:
-            return output_error("unknown_task_command", f"未知任务命令: {args.task_cmd}")
+            handler = task_command_map.get(args.task_cmd)
+            if handler:
+                handler(args, token)
+            else:
+                return output_error("unknown_task_command", f"未知任务命令: {args.task_cmd}")
     else:
         handler = command_map.get(args.cmd)
         if handler:
