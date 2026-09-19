@@ -569,6 +569,20 @@ def _restore_payload(task: Dict) -> Dict:
         payload["isReminderOn"] = task.get("isReminderOn", True)
     return payload
 
+def _copy_checklist_items(token: str, dst_list_id: str, new_task_id: str, source_task: Dict):
+    """把源任务的子任务逐一复制到新任务（移动时保留子任务，避免丢失）。
+
+    Graph 创建子任务仅接受 displayName，勾选状态需创建后再 PATCH。
+    """
+    for item in source_task.get("checklistItems", []):
+        created = api(token, "POST",
+                      f"/me/todo/lists/{dst_list_id}/tasks/{new_task_id}/checklistItems",
+                      {"displayName": item.get("displayName", "")}, quiet=True)
+        if created and item.get("isChecked"):
+            api(token, "PATCH",
+                f"/me/todo/lists/{dst_list_id}/tasks/{new_task_id}/checklistItems/{created['id']}",
+                {"isChecked": True}, quiet=True)
+
 def format_task_output(task: Dict, include_body: bool = False) -> Dict:
     """格式化任务输出（统一结构）"""
     output = {
@@ -803,24 +817,7 @@ def cmd_task_list(args, token):
 
     tasks = tasks_data.get("value", [])
 
-    # 过滤
-    if args.filter:
-        f = args.filter.lower()
-        if f == "incomplete":
-            tasks = [t for t in tasks if t.get("status") != "completed"]
-        elif f == "completed":
-            tasks = [t for t in tasks if t.get("status") == "completed"]
-        elif f == "today":
-            today = datetime.now().date()
-            tasks = [t for t in tasks if t.get("dueDateTime") and
-                     _graph_utc_to_local_date(t["dueDateTime"]["dateTime"]) == today]
-        elif f == "overdue":
-            now = datetime.utcnow()  # Graph 的 due 为 UTC，比较也用 UTC
-            tasks = [t for t in tasks if t.get("dueDateTime") and
-                     _parse_graph_datetime(t["dueDateTime"]["dateTime"]) < now and
-                     t.get("status") != "completed"]
-        elif f == "high":
-            tasks = [t for t in tasks if t.get("importance") == "high"]
+    tasks = _apply_filters(tasks, args)
 
     formatted_tasks = [format_task_output(t, include_body=args.verbose) for t in tasks]
 
@@ -904,8 +901,8 @@ def cmd_task_move(args, token):
     if not dst_lst:
         return output_error("list_not_found", f"未找到目标列表「{args.to}」")
 
-    # 获取源任务
-    task = api(token, "GET", f"/me/todo/lists/{src_lst['id']}/tasks/{args.task_id}")
+    # 获取源任务（展开子任务，移动时一并复制过去，避免丢失）
+    task = api(token, "GET", f"/me/todo/lists/{src_lst['id']}/tasks/{args.task_id}?$expand=checklistItems")
     if not task:
         return output_error("task_not_found", f"未找到任务 {args.task_id}")
 
@@ -933,6 +930,9 @@ def cmd_task_move(args, token):
     result = api(token, "POST", f"/me/todo/lists/{dst_lst['id']}/tasks", new_task)
     if not result:
         return output_error("create_failed", "在新列表中创建任务失败")
+
+    # 复制子任务到新任务，避免移动丢失子任务
+    _copy_checklist_items(token, dst_lst["id"], result["id"], task)
 
     # 删除原任务；若删除失败，回滚新建的副本以免留下重复任务
     del_result = api(token, "DELETE", f"/me/todo/lists/{src_lst['id']}/tasks/{args.task_id}")
@@ -1225,13 +1225,11 @@ def cmd_checklist_delete(args, token):
 # ═══════════════════════════════════════════════════════════════════════════════
 
 def _resolve_match(args) -> Optional[str]:
-    """取批量命令的标题匹配关键词。
+    """取 complete-all 的标题匹配关键词，并拦截其遗留的 --filter 用法。
 
-    `--filter` 在 `task list` 里是枚举语义（incomplete/completed/today/…），
-    在批量命令里却是标题子串匹配。同名不同义会让
-    `task delete-all --filter completed` 读起来像「删除已完成的任务」，
-    实际删掉的是「标题里含 completed 的任务」。批量命令因此改用 `--match`；
-    旧的 `--filter` 保留识别但直接报错，不再静默按子串匹配。
+    delete-all / move-all 已改为真正的状态枚举 --filter（见 _fetch_tasks_filtered），
+    不再走本函数。此处仅服务 complete-all：其 --filter 仍按旧方式报错，
+    提示改用 --match，避免「标题子串匹配」被误当「状态过滤」。
     """
     legacy = getattr(args, "legacy_filter", None)
     if legacy is not None:
@@ -1242,6 +1240,65 @@ def _resolve_match(args) -> Optional[str]:
             f"请改用: --match \"{legacy}\""
         )
     return getattr(args, "match", None)
+
+def _apply_filters(tasks: List, args) -> List:
+    """按通用过滤条件筛选任务（task list / delete-all / move-all 共用）。
+
+    多个条件同时给出时取交集。用 getattr 安全访问属性，未提供的条件自动跳过。
+    """
+    f = getattr(args, "filter", None)
+    if f:
+        f = f.lower()
+        if f == "incomplete":
+            tasks = [t for t in tasks if t.get("status") != "completed"]
+        elif f == "completed":
+            tasks = [t for t in tasks if t.get("status") == "completed"]
+        elif f == "today":
+            today = datetime.now().date()
+            tasks = [t for t in tasks if t.get("dueDateTime") and
+                     _graph_utc_to_local_date(t["dueDateTime"]["dateTime"]) == today]
+        elif f == "overdue":
+            now = datetime.utcnow()
+            tasks = [t for t in tasks if t.get("dueDateTime") and
+                     _parse_graph_datetime(t["dueDateTime"]["dateTime"]) < now and
+                     t.get("status") != "completed"]
+        elif f == "high":
+            tasks = [t for t in tasks if t.get("importance") == "high"]
+
+    if getattr(args, "importance", None):
+        tasks = [t for t in tasks if t.get("importance") == args.importance]
+
+    match = getattr(args, "match", None)
+    if match:
+        keyword = match.lower()
+        tasks = [t for t in tasks if keyword in t.get("title", "").lower()]
+
+    if getattr(args, "has_checklist", False):
+        tasks = [t for t in tasks if t.get("checklistItems")]
+
+    if getattr(args, "has_due", False):
+        tasks = [t for t in tasks if t.get("dueDateTime")]
+
+    if getattr(args, "has_reminder", False):
+        tasks = [t for t in tasks if t.get("isReminderOn")]
+
+    return tasks
+
+def _fetch_tasks_filtered(token: str, list_id: str, args, expand_checklist: bool = False) -> Optional[List]:
+    """拉取列表任务并按批量命令的过滤条件筛选（delete-all 与 move-all 共用）。
+
+    返回原始任务对象列表，保留 checklistItems 等原始字段。expand_checklist=True 时
+    额外展开 checklistItems（移动任务需保留子任务，即便未使用 --has-checklist）。
+    """
+    path = f"/me/todo/lists/{list_id}/tasks"
+    if expand_checklist or getattr(args, "has_checklist", False):
+        path += "?$expand=checklistItems"
+
+    tasks_data = api_with_pagination(token, "GET", path)
+    if not tasks_data:
+        return None
+
+    return _apply_filters(tasks_data.get("value", []), args)
 
 def cmd_task_complete_all(args, token):
     """批量完成任务"""
@@ -1300,34 +1357,30 @@ def cmd_task_complete_all(args, token):
     )
 
 def cmd_task_delete_all(args, token):
-    """批量删除任务"""
-    match = _resolve_match(args)
-
-    # 此前 --filter 是可选的，缺省即「全选」：`task delete-all --yes`
-    # 会清空整个列表，且批量删除不记 undo、无法恢复。
-    # 现在要求显式限定范围，或用 --all 明确表示确实要清空。
-    if not match and not getattr(args, "all", False):
-        return output_error(
-            "scope_required",
-            "delete-all 会删除列表内全部任务，且批量删除不可撤销。"
-            "请用 --match \"<关键词>\" 限定范围，"
-            "或显式加 --all 表示确实要清空整个列表。"
-        )
-
+    """批量删除任务（支持状态/优先级/子任务/关键词组合过滤）"""
     lst = get_list_by_name(token, args.list)
     if not lst:
         return output_error("list_not_found", f"未找到列表「{args.list}」")
 
-    tasks_data = api_with_pagination(token, "GET", f"/me/todo/lists/{lst['id']}/tasks")
-    if not tasks_data:
+    has_scope = any([
+        getattr(args, "filter", None),
+        getattr(args, "importance", None),
+        getattr(args, "has_checklist", False),
+        getattr(args, "match", None),
+    ])
+
+    # 无任何过滤条件时必须显式 --all，避免误删整个列表（批量删除不可撤销）
+    if not has_scope and not getattr(args, "all", False):
+        return output_error(
+            "scope_required",
+            "delete-all 会删除列表内全部任务，且批量删除不可撤销。"
+            "请用 --filter/--importance/--has-checklist/--match 限定范围，"
+            "或显式加 --all 表示确实要清空整个列表。"
+        )
+
+    tasks = _fetch_tasks_filtered(token, lst["id"], args)
+    if tasks is None:
         return
-
-    tasks = tasks_data.get("value", [])
-
-    # 过滤
-    if match:
-        keyword = match.lower()
-        tasks = [t for t in tasks if keyword in t.get("title", "").lower()]
 
     if not tasks:
         return output_json({"count": 0, "message": "无匹配的任务"}, "无匹配的任务")
@@ -1361,6 +1414,81 @@ def cmd_task_delete_all(args, token):
     output_json(
         {"deleted": len(deleted), "failed": len(failed), "total": len(tasks)},
         f"✅ 已删除 {len(deleted)} 个任务" + (f"（{len(failed)} 个失败）" if failed else "")
+    )
+
+def cmd_task_move_all(args, token):
+    """批量移动任务到目标列表（支持状态/优先级/子任务/关键词组合过滤）"""
+    src_name = getattr(args, "from", "Tasks") or "Tasks"
+    src_lst = get_list_by_name(token, src_name)
+    if not src_lst:
+        return output_error("list_not_found", f"未找到源列表「{src_name}」")
+
+    dst_lst = get_list_by_name(token, args.to)
+    if not dst_lst:
+        return output_error("list_not_found", f"未找到目标列表「{args.to}」")
+
+    if src_lst["id"] == dst_lst["id"]:
+        return output_error("same_list", "源列表与目标列表不能相同")
+
+    # 移动需保留子任务，故始终展开 checklistItems（即便未用 --has-checklist）
+    tasks = _fetch_tasks_filtered(token, src_lst["id"], args, expand_checklist=True)
+    if tasks is None:
+        return
+
+    if not tasks:
+        return output_json({"count": 0, "message": "无匹配的任务"}, "无匹配的任务")
+
+    # 确认
+    if not args.yes:
+        _require_yes_if_noninteractive()
+        print(f"📦 将移动 {len(tasks)} 个任务到「{dst_lst['displayName']}」:", file=sys.stderr)
+        for t in tasks[:5]:
+            print(f"  • {t['title']}", file=sys.stderr)
+        if len(tasks) > 5:
+            print(f"  ... 还有 {len(tasks) - 5} 个", file=sys.stderr)
+
+        confirm = input(f"\n确认移动？(y/N): ")
+        if confirm.lower() != 'y':
+            return output_json({"status": "cancelled"}, "已取消")
+
+    moved = []
+    failed = []
+    for task in tasks:
+        # Graph 无跨列表移动 API，用“创建副本 + 删除源任务”模拟；
+        # 复用 _restore_payload 只携带可写字段，避免把 id/时间戳一并写入。
+        new_task = _restore_payload(task)
+        result = api(token, "POST", f"/me/todo/lists/{dst_lst['id']}/tasks", new_task, quiet=True)
+        if not result:
+            failed.append(task["id"])
+            continue
+
+        # 复制子任务到新任务，避免移动丢失子任务
+        _copy_checklist_items(token, dst_lst["id"], result["id"], task)
+
+        del_result = api(token, "DELETE", f"/me/todo/lists/{src_lst['id']}/tasks/{task['id']}", quiet=True)
+        if not del_result:
+            # 删除源任务失败则回滚新建副本，避免留下重复任务
+            api(token, "DELETE", f"/me/todo/lists/{dst_lst['id']}/tasks/{result['id']}", quiet=True)
+            failed.append(task["id"])
+            continue
+
+        record_undo("task_move", {
+            "src_list_id": src_lst["id"],
+            "dst_list_id": dst_lst["id"],
+            "new_task_id": result["id"],
+            "old_task": task
+        })
+        moved.append(task["id"])
+
+    if failed:
+        emit_error("partial_failure", f"{len(failed)} 个任务移动失败",
+                   {"failed": failed})
+
+    output_json(
+        {"moved": len(moved), "failed": len(failed), "total": len(tasks),
+         "from": src_lst["displayName"], "to": dst_lst["displayName"]},
+        f"✅ 已移动 {len(moved)} 个任务到「{dst_lst['displayName']}」"
+        + (f"（{len(failed)} 个失败）" if failed else "")
     )
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -1703,6 +1831,8 @@ def main():
     p.add_argument("--filter", "-f",
                    choices=["incomplete", "completed", "today", "overdue", "high"],
                    help="过滤条件")
+    p.add_argument("--has-due", action="store_true", help="仅匹配有到期日的任务")
+    p.add_argument("--has-reminder", action="store_true", help="仅匹配有提醒的任务")
     p.add_argument("--verbose", "-v", action="store_true", help="显示详细信息")
 
     # task info
@@ -1759,11 +1889,35 @@ def main():
 
     # task delete-all
     p = task_sub.add_parser("delete-all", help="批量删除任务")
-    p.add_argument("--match", "-m", help="按标题子串匹配")
-    p.add_argument("--filter", "-f", dest="legacy_filter", help=argparse.SUPPRESS)
+    p.add_argument("--filter", "-f",
+                   choices=["incomplete", "completed", "today", "overdue", "high"],
+                   help="按状态过滤（语义同 task list --filter）")
+    p.add_argument("--importance", "-i", choices=["low", "normal", "high"],
+                   help="按优先级过滤")
+    p.add_argument("--has-checklist", action="store_true",
+                   help="仅匹配有子任务（检查项）的任务")
+    p.add_argument("--has-due", action="store_true", help="仅匹配有到期日的任务")
+    p.add_argument("--has-reminder", action="store_true", help="仅匹配有提醒的任务")
+    p.add_argument("--match", "-m", help="按标题关键词子串匹配")
     p.add_argument("--all", action="store_true",
-                   help="确实要删除列表内全部任务（与 --match 二选一）")
+                   help="删除列表内全部任务（与其它过滤条件互斥，谨慎使用）")
     p.add_argument("--list", "-l", default="Tasks", help="列表名称")
+    p.add_argument("--yes", "-y", action="store_true", help="跳过确认")
+
+    # task move-all
+    p = task_sub.add_parser("move-all", help="批量移动任务到其他列表")
+    p.add_argument("--to", "-t", required=True, help="目标列表名称")
+    p.add_argument("--from", dest="from", default="Tasks", help="源列表名称")
+    p.add_argument("--filter", "-f",
+                   choices=["incomplete", "completed", "today", "overdue", "high"],
+                   help="按状态过滤（语义同 task list --filter）")
+    p.add_argument("--importance", "-i", choices=["low", "normal", "high"],
+                   help="按优先级过滤")
+    p.add_argument("--has-checklist", action="store_true",
+                   help="仅匹配有子任务（检查项）的任务")
+    p.add_argument("--has-due", action="store_true", help="仅匹配有到期日的任务")
+    p.add_argument("--has-reminder", action="store_true", help="仅匹配有提醒的任务")
+    p.add_argument("--match", "-m", help="按标题关键词子串匹配")
     p.add_argument("--yes", "-y", action="store_true", help="跳过确认")
 
     # task checklist（子任务/检查项）
@@ -1853,6 +2007,7 @@ def main():
         "delete": cmd_task_delete,
         "complete-all": cmd_task_complete_all,
         "delete-all": cmd_task_delete_all,
+        "move-all": cmd_task_move_all,
     }
 
     # checklist 子命令

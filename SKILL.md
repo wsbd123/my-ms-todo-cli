@@ -94,6 +94,10 @@ python todo_v2.py task list --filter overdue --json
 python todo_v2.py task list --list "工作" --json
 # → {"list": "工作", "filter": null, "count": 28, "tasks": [...]}
 
+# 有到期日 / 有提醒 的任务
+python todo_v2.py task list --list "工作" --has-due --json
+python todo_v2.py task list --list "工作" --has-reminder --json
+
 # 查看单个任务详情
 python todo_v2.py task info <task-id> --json
 # → {"id": "...", "title": "...", "body": "...", "due": "...", ...}
@@ -162,17 +166,48 @@ python todo_v2.py task checklist delete <task-id> <item-id> --json
 ### Batch Operations
 
 ```bash
-# 批量完成包含关键词的任务
+# 批量完成包含关键词的任务（或全部未完成）
 python todo_v2.py task complete-all --match "测试" --yes --json
-# → {"completed": 5, "total": 5}
 
-# 批量删除匹配的任务
-python todo_v2.py task delete-all --match "临时" --yes --json
-# → {"deleted": 3, "total": 3}
+# 批量删除：按状态过滤（completed/incomplete/today/overdue/high）
+python todo_v2.py task delete-all --filter completed --list "工作" --yes --json
+python todo_v2.py task delete-all --filter overdue --list "工作" --yes --json
 
-# 完成所有未完成任务（需确认）
-python todo_v2.py task complete-all --json
+# 批量删除：按优先级过滤
+python todo_v2.py task delete-all --importance low --list "工作" --yes --json
+
+# 批量删除：仅匹配有子任务（检查项）的任务
+python todo_v2.py task delete-all --has-checklist --list "工作" --yes --json
+
+# 批量删除：按标题关键词匹配
+python todo_v2.py task delete-all --match "临时" --list "工作" --yes --json
+
+# 批量删除：过滤条件可组合（取交集）
+python todo_v2.py task delete-all --filter completed --match "报告" --list "工作" --yes --json
+# → {"deleted": 22, "failed": 0, "total": 22}
+
+# 清空整个列表（需显式 --all，谨慎使用）
+python todo_v2.py task delete-all --all --list "工作" --yes --json
+
+# 批量移动：按过滤条件移动到目标列表
+python todo_v2.py task move-all --from "工作" --to "归档" --filter completed --yes --json
+python todo_v2.py task move-all --from "工作" --to "归档" --has-checklist --yes --json
+# → {"moved": 5, "failed": 0, "total": 5, "from": "工作", "to": "归档"}
 ```
+
+批量删除（`delete-all`）/批量移动（`move-all`）共用同套过滤参数，可组合取交集：
+
+- `--filter/-f` 状态枚举：`incomplete` / `completed` / `today` / `overdue` / `high`（语义同 `task list --filter`）
+- `--importance/-i` 优先级：`low` / `normal` / `high`
+- `--has-checklist` 仅匹配有子任务（检查项）的任务
+- `--has-due` 仅匹配有到期日的任务
+- `--has-reminder` 仅匹配有提醒的任务
+- `--match/-m` 标题关键词子串
+
+> 移动（`move` / `move-all`）会连同子任务一起搬移，不再丢失检查项。
+> 批量删除/移动是破坏性操作：交互模式会提示确认；非交互（无 TTY 或 `--json`）需显式 `--yes`，
+> 否则以 `confirmation_required` 错误退出。`delete-all` 不记 undo、不可恢复；`move-all` 每次成功移动记 undo。
+> 部分失败通过 `failed` 字段和非零退出码报告。
 
 ### Status and Sync
 

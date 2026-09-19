@@ -176,14 +176,37 @@ mstodo list-delete "List Name" --yes
 # 完成标题包含 "test" 的所有未完成任务
 mstodo task complete-all --match "test" --yes
 
-# 删除标题包含 "draft" 的所有任务
-mstodo task delete-all --match "draft" --yes
+# 删除：按状态过滤（completed/incomplete/today/overdue/high）
+mstodo task delete-all --filter completed --list "工作" --yes
+mstodo task delete-all --filter overdue --list "工作" --yes
+
+# 删除：按优先级 / 是否有子任务 / 标题关键词
+mstodo task delete-all --importance low --list "工作" --yes
+mstodo task delete-all --has-checklist --list "工作" --yes
+mstodo task delete-all --match "draft" --list "工作" --yes
+
+# 删除：清空整个列表（需显式 --all）
+mstodo task delete-all --all --list "工作" --yes
+
+# 移动：按同样条件批量移动到另一个列表
+mstodo task move-all --from "工作" --to "归档" --filter completed --yes
+mstodo task move-all --from "工作" --to "归档" --has-checklist --yes
 ```
 
-> `--filter` 在这里匹配任务**标题**的子字符串（不是状态）。
+`delete-all` / `move-all` 共用过滤参数，可组合取交集：
+
+- `--filter/-f`：状态枚举 `incomplete` / `completed` / `today` / `overdue` / `high`（语义同 `task list --filter`）
+- `--importance/-i`：优先级 `low` / `normal` / `high`
+- `--has-checklist`：仅匹配有子任务（检查项）的任务
+- `--has-due`：仅匹配有到期日的任务
+- `--has-reminder`：仅匹配有提醒的任务
+- `--match/-m`：标题关键词子串
+
+> 移动（`move` / `move-all`）会连同子任务一起搬移，不再丢失检查项。
 > 破坏性批量命令在交互模式下会提示确认；
 > 在非交互式上下文中（无 TTY 或 `--json`），你**必须**传递 `--yes`，
 > 否则命令会以 `confirmation_required` 错误退出，而不是挂在提示上。
+> `delete-all` 不记 undo、不可恢复；`move-all` 每次成功移动记 undo。
 > 部分失败通过结果中的 `failed` 字段和非零退出码报告。
 
 ### 状态和同步
