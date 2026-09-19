@@ -389,6 +389,24 @@ mstodo setup
 python3 -m pip install -r requirements.txt
 ```
 
+## 📝 变更记录
+
+### 2026-09-20
+
+**修复：纯日期截止日少一天**（`todo_v2.py`）
+
+`--due 2026-09-22` 这类纯日期写法会实际存成 9月21日到期。原因是 `parse_datetime()`
+中 ISO 分支排在日期分支之前，`datetime.fromisoformat("2026-09-22")` 会返回本地
+00:00，经 UTC 换算后日期回退一天。现将纯日期分支提前，并统一取本地 9:00
+（与 `today` / `tomorrow` 的处理一致），确保时区换算不跨日。
+`today` / `tomorrow` / `HH:MM` / 带时间的 ISO 写法行为不变。
+
+**文档：SKILL.md 补充列表定位说明与 PATH 兜底**
+
+- 新增「列表定位（`--list` 默认值）」小节：`task` 下各子命令默认只作用于 `Tasks`
+  列表，跨列表须显式传 `--list`；并给出「找不到任务」的排查顺序
+- 前置条件中补充命令报 `command not found` 时改用绝对路径兜底的方法
+
 ## 📄 许可证
 
 MIT © Haolong Zheng（原作者）

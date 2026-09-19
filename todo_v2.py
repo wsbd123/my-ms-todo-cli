@@ -454,15 +454,19 @@ def parse_datetime(s: str) -> datetime:
             candidate += timedelta(days=1)
         return candidate
 
-    # ISO 格式
+    # 纯日期格式 YYYY-MM-DD
+    # 必须排在 ISO 分支之前：fromisoformat("2026-09-22") 会解析成功并返回本地 00:00，
+    # 经 _local_to_utc_str 转 UTC 后日期回退一天（--due 2026-09-22 实际会存成 9月21日）。
+    # 这里取 9:00，与 today/tomorrow 保持一致，确保时区换算后不跨日。
+    if re.match(r'^\d{4}-\d{2}-\d{2}$', s):
+        try:
+            return datetime.strptime(s, "%Y-%m-%d").replace(hour=9, minute=0, second=0, microsecond=0)
+        except ValueError:
+            pass
+
+    # ISO 格式（日期 + 时间）
     try:
         return datetime.fromisoformat(s)
-    except ValueError:
-        pass
-
-    # 日期格式
-    try:
-        return datetime.strptime(s, "%Y-%m-%d").replace(hour=9, minute=0, second=0, microsecond=0)
     except ValueError:
         pass
 
