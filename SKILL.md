@@ -2,6 +2,19 @@
 
 Agent-native interface for Microsoft To Do task management.
 
+## 调用方式
+
+本工具有两种等价的调用入口，下文示例统一使用 `python todo_v2.py`，可任意替换为 `mstodo` 或 `ms-todo`：
+
+```bash
+# 方式一：源码运行（开发时）
+python todo_v2.py task add "任务" --json
+
+# 方式二：npm 全局安装后的命令（二选一）
+mstodo task add "任务" --json
+ms-todo task add "任务" --json
+```
+
 ## Quick Start
 
 ```bash
@@ -76,6 +89,10 @@ python todo_v2.py task list --filter completed --json
 
 # 过期任务
 python todo_v2.py task list --filter overdue --json
+
+# 按列表查询（--list 指定列表名，默认列表名为 Tasks）
+python todo_v2.py task list --list "工作" --json
+# → {"list": "工作", "filter": null, "count": 28, "tasks": [...]}
 
 # 查看单个任务详情
 python todo_v2.py task info <task-id> --json
@@ -296,6 +313,12 @@ for task in test_tasks:
 python todo_v2.py task list --json
 ```
 
+使用说明：
+
+- `--json` 是全局开关，可放在命令的任意位置（如 `task list 工作 --json` 或 `task list --json --list 工作`）。
+- `task list` 额外提供 `--verbose/-v`，用于在结果中附带 `body` 详情；可与 `--json` 叠加（`task list --json --verbose`），此时每个任务对象会多出 `body` 字段。
+- 两者职责不同：`--json` 控制输出为 JSON，`--verbose` 控制是否包含 `body` 详情。
+
 所有输出字段:
 - `id` - 任务ID（完整）
 - `title` - 标题
@@ -328,6 +351,12 @@ python todo_v2.py task list
 ```bash
 pip install msal requests
 ```
+
+运行前置条件：
+
+1. 首次使用先配置并认证（见下方 "Azure App Registration"），否则会报 `no_client_id` / `auth_failed`。
+2. 执行前可先用 `python todo_v2.py status --json` 检查认证与同步状态。
+3. 运行需要读写 `~/.config/ms-todo/`（缓存、token、undo_log）。在受限/sandbox 环境下若报 `PermissionError: ... .undo_log.json.tmp`，请授予该目录写权限（或关闭沙箱限制）。
 
 ## Azure App Registration
 

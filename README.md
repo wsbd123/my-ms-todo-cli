@@ -39,7 +39,7 @@ npm install -g github:wsbd123/my-ms-todo-cli
 ```bash
 git clone https://github.com/wsbd123/my-ms-todo-cli.git
 cd my-ms-todo-cli
-npm install -g .
+npm install && npm install -g .
 ```
 
 安装后会提供 `mstodo` 和 `ms-todo` 两个命令。接着运行 `mstodo setup`
