@@ -3,6 +3,7 @@
 const { spawn } = require('child_process');
 const path = require('path');
 const fs = require('fs');
+const { detectPython } = require('../lib/utils');
 
 // 获取Python脚本的路径
 const scriptPath = path.join(__dirname, '..', 'todo_v2.py');
@@ -12,28 +13,6 @@ if (!fs.existsSync(scriptPath)) {
   console.error('❌ Error: todo_v2.py not found');
   console.error('Please reinstall the package: npm install -g ms-todo-cli');
   process.exit(1);
-}
-
-// 检查Python是否可用
-function checkPython() {
-  const pythonCommands = ['python3', 'python'];
-
-  for (const cmd of pythonCommands) {
-    try {
-      const result = require('child_process').spawnSync(cmd, ['--version'], {
-        stdio: 'pipe',
-        encoding: 'utf-8'
-      });
-
-      if (result.status === 0) {
-        return cmd;
-      }
-    } catch (e) {
-      // 继续尝试下一个命令
-    }
-  }
-
-  return null;
 }
 
 // 特殊命令处理：setup, config init, auth login, auth status
@@ -54,16 +33,16 @@ if (command === 'setup' ||
 }
 
 // 其他命令：直接调用Python脚本
-const pythonCmd = checkPython();
+const python3 = detectPython();
 
-if (!pythonCmd) {
+if (!python3.found) {
   console.error('❌ Error: Python 3 is required but not found');
   console.error('Please install Python 3: https://www.python.org/downloads/');
   process.exit(1);
 }
 
 // 执行Python脚本
-const python = spawn(pythonCmd, [scriptPath, ...args], {
+const python = spawn(python3.command, [scriptPath, ...args], {
   stdio: 'inherit',
   env: process.env
 });
@@ -73,6 +52,10 @@ python.on('error', (error) => {
   process.exit(1);
 });
 
-python.on('exit', (code) => {
-  process.exit(code || 0);
+python.on('exit', (code, signal) => {
+  // 被信号杀死时 code 为 null；不要误报成功退出码 0
+  if (code === null) {
+    process.exit(signal ? 1 : 0);
+  }
+  process.exit(code);
 });

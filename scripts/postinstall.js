@@ -1,30 +1,23 @@
 const chalk = require('chalk');
-const { detectPython, installPythonDeps } = require('../lib/utils');
+const { detectPython } = require('../lib/utils');
 
-console.log(chalk.cyan('\n📦 Installing ms-todo-cli dependencies...\n'));
+// 注意：不在 postinstall 阶段自动执行 `pip install`。
+// 全局安装期间静默修改用户的 Python 环境会带来意外副作用，
+// 且在 PEP 668「externally-managed-environment」的系统上会直接失败。
+// Python 依赖的安装交由显式的 `mstodo setup` 命令完成。
 
-// 检测Python
+console.log(chalk.cyan('\n📦 ms-todo-cli installed\n'));
+
 const python = detectPython();
-if (!python.found) {
-  console.log(chalk.yellow('⚠️  Python 3 not detected'));
-  console.log(chalk.gray('Python dependencies will be installed on first run'));
-  console.log(chalk.gray('Install Python 3: https://www.python.org/downloads/\n'));
-  process.exit(0);
-}
-
-console.log(chalk.green(`✅ Python ${python.version} detected`));
-
-// 安装Python依赖
-const success = installPythonDeps();
-
-if (success) {
-  console.log(chalk.green('\n✅ All dependencies installed successfully!\n'));
-  console.log(chalk.cyan('Get started:'));
-  console.log(chalk.gray('  mstodo config init'));
-  console.log(chalk.gray('  mstodo auth login'));
-  console.log(chalk.gray('  mstodo task list\n'));
+if (python.found) {
+  console.log(chalk.green(`✅ Python ${python.version} detected`));
 } else {
-  console.log(chalk.yellow('\n⚠️  Python dependencies installation incomplete'));
-  console.log(chalk.gray('You can install them manually:'));
-  console.log(chalk.gray('  pip3 install -r requirements.txt\n'));
+  console.log(chalk.yellow('⚠️  Python 3 not detected'));
+  console.log(chalk.gray('   Install Python 3: https://www.python.org/downloads/'));
 }
+
+console.log(chalk.cyan('\nGet started:'));
+console.log(chalk.gray('  mstodo setup           # install Python dependencies'));
+console.log(chalk.gray('  mstodo config init'));
+console.log(chalk.gray('  mstodo auth login'));
+console.log(chalk.gray('  mstodo task list\n'));
