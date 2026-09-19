@@ -2,10 +2,18 @@
 
 > Agent-native command-line interface for Microsoft To Do
 
-[![npm version](https://badge.fury.io/js/ms-todo-cli.svg)](https://www.npmjs.com/package/ms-todo-cli)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 A powerful CLI tool for managing Microsoft To Do tasks from your terminal. Perfect for automation, AI agents, and productivity workflows.
+
+> **关于这个仓库**
+>
+> 这是 [zhenghaolong/ms-todo-cli](https://github.com/zhenghaolong/ms-todo-cli)
+> 的个人 fork，自用为主，**未发布到 npm**。相对上游有大量本地改动
+> （分页、原子写入、重试策略、undo 栈、非交互确认、JSON 错误契约等）。
+>
+> npm 上的 `ms-todo-cli` 是上游作者的包，内容与本仓库**不同**，
+> 请勿用 `npm install -g ms-todo-cli` 安装本项目 —— 装到的会是上游版本。
 
 ## ✨ Features
 
@@ -20,17 +28,22 @@ A powerful CLI tool for managing Microsoft To Do tasks from your terminal. Perfe
 
 ## 📦 Installation
 
-### Quick Start (Recommended)
+从本仓库直接全局安装（本项目未发布到 npm）：
 
 ```bash
-npx ms-todo-cli@latest setup
+npm install -g github:wsbd123/my-ms-todo-cli
 ```
 
-### Global Installation
+或者克隆后从本地安装，便于修改代码：
 
 ```bash
-npm install -g ms-todo-cli
+git clone https://github.com/wsbd123/my-ms-todo-cli.git
+cd my-ms-todo-cli
+npm install -g .
 ```
+
+安装后会提供 `mstodo` 和 `ms-todo` 两个命令。接着运行 `mstodo setup`
+安装 Python 依赖（`npm install` **不会**自动装 Python 依赖）。
 
 ## 🚀 Quick Start
 
@@ -353,23 +366,16 @@ mstodo setup
 python3 -m pip install -r requirements.txt
 ```
 
-## 🤝 Contributing
-
-Contributions are welcome! Please feel free to submit a Pull Request.
-
 ## 📄 License
 
-MIT © Haolong Zheng
+MIT © Haolong Zheng（原作者）
+
+本仓库为个人 fork，沿用上游的 MIT 许可与著作权署名，见 [LICENSE](LICENSE)。
 
 ## 🔗 Links
 
-- [GitHub Repository](https://github.com/zhenghaolong/ms-todo-cli)
-- [npm Package](https://www.npmjs.com/package/ms-todo-cli)
-- [Report Issues](https://github.com/zhenghaolong/ms-todo-cli/issues)
-
-## ⭐ Support
-
-If you find this tool useful, please consider giving it a star on GitHub!
+- [本仓库](https://github.com/wsbd123/my-ms-todo-cli)
+- [上游项目](https://github.com/zhenghaolong/ms-todo-cli) · [上游 npm 包](https://www.npmjs.com/package/ms-todo-cli)（与本仓库内容不同）
 
 ---
 

@@ -22,9 +22,14 @@
   ],
   "author": "Haolong Zheng",
   "license": "MIT",
+  "private": true,
   "repository": {
     "type": "git",
-    "url": "https://github.com/zhenghaolong/ms-todo-cli.git"
+    "url": "git+https://github.com/wsbd123/my-ms-todo-cli.git"
+  },
+  "homepage": "https://github.com/wsbd123/my-ms-todo-cli#readme",
+  "bugs": {
+    "url": "https://github.com/wsbd123/my-ms-todo-cli/issues"
   },
   "engines": {
     "node": ">=14.0.0"
