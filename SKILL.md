@@ -1,66 +1,87 @@
+---
+name: ms-todo
+description: >-
+  微软待办（Microsoft To Do）任务管理 CLI 技能，命令入口为 mstodo / ms-todo。
+  用于创建、查询、更新、完成、删除任务，管理任务列表与子任务（检查项），
+  支持批量删除/移动、到期日与提醒、优先级、关键词搜索、结构化 JSON 输出。
+  当用户提到"待办"、"任务"、"提醒我"、"创建任务"、"今天要做的事"、"待办清单"、
+  "Microsoft To Do"、"微软待办"、"子任务"、"检查项"、"待办列表"、"任务完成情况"时使用此 Skill。
+---
+
 # Microsoft To Do CLI Skill
 
 Agent-native interface for Microsoft To Do task management.
 
 ## 调用方式
 
-本工具有两种等价的调用入口，下文示例统一使用 `python todo_v2.py`，可任意替换为 `mstodo` 或 `ms-todo`：
+本机已通过 npm 全局安装，命令入口为 `mstodo`（等价别名 `ms-todo`）。下文示例统一使用 `mstodo`。
 
 ```bash
-# 方式一：源码运行（开发时）
-python todo_v2.py task add "任务" --json
-
-# 方式二：npm 全局安装后的命令（二选一）
 mstodo task add "任务" --json
-ms-todo task add "任务" --json
+ms-todo task add "任务" --json   # 等价别名
+```
+
+若 `mstodo` 不在 PATH 中（或需要源码开发调试），可直接调用已安装脚本：
+
+```bash
+python3 /Users/my-mini/.npm-global/lib/node_modules/ms-todo-cli/todo_v2.py task add "任务" --json
 ```
 
 ## Quick Start
 
 ```bash
 # 配置和认证
-python todo_v2.py config --client-id <YOUR_CLIENT_ID>
-python todo_v2.py auth
+mstodo config --client-id <YOUR_CLIENT_ID>
+mstodo auth
 
 # 创建任务
-python todo_v2.py task add "完成报告" --body "季度总结" --due tomorrow --importance high --json
+mstodo task add "完成报告" --body "季度总结" --due tomorrow --importance high --json
 
 # 查询任务
-python todo_v2.py task list --filter incomplete --json
-python todo_v2.py task search "报告" --json
+mstodo task list --filter incomplete --json
+mstodo task search "报告" --json
 
 # 完成任务
-python todo_v2.py task complete <task-id> --json
+mstodo task complete <task-id> --json
 ```
 
 ## Core Capabilities
+
+### 列表定位（`--list` 默认值，重要）
+
+`task` 下所有需要定位任务的子命令（`list` / `search` / `update` / `complete` / `uncomplete` / `delete` / `info` / `checklist`）
+都受 `--list/-l` 影响，**默认值为 `Tasks`**：不带 `--list` 时，只作用于名为 `Tasks` 的默认列表。
+
+- 跨列表操作必须显式指定，如 `mstodo task update <task-id> --title "新标题" --list "工作" --json`
+- `task search` 同样是**单列表**搜索，默认只搜 `Tasks`；目标任务在其它列表时返回 `{"count": 0}` 而非报错，静默空结果容易被误判为"任务不存在"
+- 排查顺序：先 `mstodo lists --json` 确认列表名，再带上 `--list "列表名"` 重试
 
 ### Task List Management
 
 ```bash
 # 创建列表
-python todo_v2.py list-create "工作任务" --json
+mstodo list-create "工作任务" --json
 # → {"id": "...", "name": "工作任务", "created": "..."}
 
 # 查看所有列表（带任务统计）
-python todo_v2.py lists --json
+mstodo lists --json
 # → {"lists": [...], "count": 5}
 
 # 重命名列表
-python todo_v2.py list-rename "旧名称" "新名称" --json
+mstodo list-rename "旧名称" "新名称" --json
 
 # 删除列表
-python todo_v2.py list-delete "列表名" --yes --json
+mstodo list-delete "列表名" --yes --json
 ```
 
 ### Task Creation (Full Field Support)
 
 ```bash
 # 基础任务
-python todo_v2.py task add "任务标题" --json
+mstodo task add "任务标题" --json
 
 # 完整字段
-python todo_v2.py task add "重要会议" \
+mstodo task add "重要会议" \
   --body "讨论Q3目标" \
   --due "2026-08-15" \
   --reminder "2026-08-15T09:00" \
@@ -76,34 +97,34 @@ python todo_v2.py task add "重要会议" \
 
 ```bash
 # 列出所有未完成任务
-python todo_v2.py task list --filter incomplete --json
+mstodo task list --filter incomplete --json
 
 # 今日任务
-python todo_v2.py task list --filter today --json
+mstodo task list --filter today --json
 
 # 高优先级任务
-python todo_v2.py task list --filter high --json
+mstodo task list --filter high --json
 
 # 已完成任务
-python todo_v2.py task list --filter completed --json
+mstodo task list --filter completed --json
 
 # 过期任务
-python todo_v2.py task list --filter overdue --json
+mstodo task list --filter overdue --json
 
 # 按列表查询（--list 指定列表名，默认列表名为 Tasks）
-python todo_v2.py task list --list "工作" --json
+mstodo task list --list "工作" --json
 # → {"list": "工作", "filter": null, "count": 28, "tasks": [...]}
 
 # 有到期日 / 有提醒 的任务
-python todo_v2.py task list --list "工作" --has-due --json
-python todo_v2.py task list --list "工作" --has-reminder --json
+mstodo task list --list "工作" --has-due --json
+mstodo task list --list "工作" --has-reminder --json
 
 # 查看单个任务详情
-python todo_v2.py task info <task-id> --json
+mstodo task info <task-id> --json
 # → {"id": "...", "title": "...", "body": "...", "due": "...", ...}
 
 # 搜索任务
-python todo_v2.py task search "关键词" --json
+mstodo task search "关键词" --json
 # → {"keyword": "关键词", "count": 3, "tasks": [...]}
 ```
 
@@ -111,19 +132,19 @@ python todo_v2.py task search "关键词" --json
 
 ```bash
 # 更新标题和描述
-python todo_v2.py task update <task-id> \
+mstodo task update <task-id> \
   --title "新标题" \
   --body "新描述" \
   --json
 
 # 更新截止日期和优先级
-python todo_v2.py task update <task-id> \
+mstodo task update <task-id> \
   --due "2026-08-20" \
   --importance low \
   --json
 
 # 添加提醒
-python todo_v2.py task update <task-id> \
+mstodo task update <task-id> \
   --reminder "2026-08-18T10:00" \
   --json
 ```
@@ -132,15 +153,15 @@ python todo_v2.py task update <task-id> \
 
 ```bash
 # 完成任务
-python todo_v2.py task complete <task-id> --json
+mstodo task complete <task-id> --json
 # → {"id": "...", "status": "completed", "title": "..."}
 
 # 重新打开已完成的任务
-python todo_v2.py task uncomplete <task-id> --json
+mstodo task uncomplete <task-id> --json
 # → {"id": "...", "status": "notStarted", "title": "..."}
 
 # 删除任务
-python todo_v2.py task delete <task-id> --json
+mstodo task delete <task-id> --json
 # → {"id": "...", "status": "deleted"}
 ```
 
@@ -148,50 +169,50 @@ python todo_v2.py task delete <task-id> --json
 
 ```bash
 # 给任务添加子任务
-python todo_v2.py task checklist add <task-id> "子任务标题" --list "工作任务" --json
+mstodo task checklist add <task-id> "子任务标题" --list "工作任务" --json
 # → {"id": "...", "displayName": "子任务标题", "isChecked": false}
 
 # 列出任务的子任务
-python todo_v2.py task checklist list <task-id> --json
+mstodo task checklist list <task-id> --json
 # → {"task_id": "...", "count": 2, "items": [{"id": "...", "displayName": "...", "isChecked": false}, ...]}
 
 # 勾选 / 取消勾选子任务
-python todo_v2.py task checklist check <task-id> <item-id> --json
-python todo_v2.py task checklist uncheck <task-id> <item-id> --json
+mstodo task checklist check <task-id> <item-id> --json
+mstodo task checklist uncheck <task-id> <item-id> --json
 
 # 删除子任务
-python todo_v2.py task checklist delete <task-id> <item-id> --json
+mstodo task checklist delete <task-id> <item-id> --json
 ```
 
 ### Batch Operations
 
 ```bash
 # 批量完成包含关键词的任务（或全部未完成）
-python todo_v2.py task complete-all --match "测试" --yes --json
+mstodo task complete-all --match "测试" --yes --json
 
 # 批量删除：按状态过滤（completed/incomplete/today/overdue/high）
-python todo_v2.py task delete-all --filter completed --list "工作" --yes --json
-python todo_v2.py task delete-all --filter overdue --list "工作" --yes --json
+mstodo task delete-all --filter completed --list "工作" --yes --json
+mstodo task delete-all --filter overdue --list "工作" --yes --json
 
 # 批量删除：按优先级过滤
-python todo_v2.py task delete-all --importance low --list "工作" --yes --json
+mstodo task delete-all --importance low --list "工作" --yes --json
 
 # 批量删除：仅匹配有子任务（检查项）的任务
-python todo_v2.py task delete-all --has-checklist --list "工作" --yes --json
+mstodo task delete-all --has-checklist --list "工作" --yes --json
 
 # 批量删除：按标题关键词匹配
-python todo_v2.py task delete-all --match "临时" --list "工作" --yes --json
+mstodo task delete-all --match "临时" --list "工作" --yes --json
 
 # 批量删除：过滤条件可组合（取交集）
-python todo_v2.py task delete-all --filter completed --match "报告" --list "工作" --yes --json
+mstodo task delete-all --filter completed --match "报告" --list "工作" --yes --json
 # → {"deleted": 22, "failed": 0, "total": 22}
 
 # 清空整个列表（需显式 --all，谨慎使用）
-python todo_v2.py task delete-all --all --list "工作" --yes --json
+mstodo task delete-all --all --list "工作" --yes --json
 
 # 批量移动：按过滤条件移动到目标列表
-python todo_v2.py task move-all --from "工作" --to "归档" --filter completed --yes --json
-python todo_v2.py task move-all --from "工作" --to "归档" --has-checklist --yes --json
+mstodo task move-all --from "工作" --to "归档" --filter completed --yes --json
+mstodo task move-all --from "工作" --to "归档" --has-checklist --yes --json
 # → {"moved": 5, "failed": 0, "total": 5, "from": "工作", "to": "归档"}
 ```
 
@@ -213,7 +234,7 @@ python todo_v2.py task move-all --from "工作" --to "归档" --has-checklist --
 
 ```bash
 # 查看全局状态
-python todo_v2.py status --json
+mstodo status --json
 # → {
 #   "user": "用户名",
 #   "lists": 5,
@@ -223,7 +244,7 @@ python todo_v2.py status --json
 # }
 
 # 同步本地缓存
-python todo_v2.py sync --json
+mstodo sync --json
 # → {"status": "synced", "timestamp": "...", "lists": 5}
 ```
 
@@ -345,7 +366,7 @@ for task in test_tasks:
 
 ```bash
 # 添加 --json 获取结构化输出
-python todo_v2.py task list --json
+mstodo task list --json
 ```
 
 使用说明：
@@ -371,7 +392,7 @@ python todo_v2.py task list --json
 
 ```bash
 # 不加 --json 则为人类可读格式
-python todo_v2.py task list
+mstodo task list
 # → 
 # 📋 Tasks  (5 项)
 #
@@ -390,8 +411,14 @@ pip install msal requests
 运行前置条件：
 
 1. 首次使用先配置并认证（见下方 "Azure App Registration"），否则会报 `no_client_id` / `auth_failed`。
-2. 执行前可先用 `python todo_v2.py status --json` 检查认证与同步状态。
+2. 执行前可先用 `mstodo status --json` 检查认证与同步状态。
 3. 运行需要读写 `~/.config/ms-todo/`（缓存、token、undo_log）。在受限/sandbox 环境下若报 `PermissionError: ... .undo_log.json.tmp`，请授予该目录写权限（或关闭沙箱限制）。
+4. 若 `mstodo` / `python3` 报 `command not found`，多半是终端 PATH 注入不完整（命令其实已安装），用绝对路径兜底即可：
+   - `mstodo`：`/Users/my-mini/.npm-global/bin/mstodo`
+   - `python3`：`/opt/homebrew/opt/python@3.10/libexec/bin/python3`
+   - `node`：`/opt/homebrew/bin/node`
+
+   例：`/opt/homebrew/opt/python@3.10/libexec/bin/python3 /Users/my-mini/.npm-global/lib/node_modules/ms-todo-cli/todo_v2.py task list --json`
 
 ## Azure App Registration
 
@@ -403,8 +430,8 @@ pip install msal requests
 6. 复制 Application (client) ID
 
 ```bash
-python todo_v2.py config --client-id <YOUR_CLIENT_ID>
-python todo_v2.py auth
+mstodo config --client-id <YOUR_CLIENT_ID>
+mstodo auth
 ```
 
 ## State Management (H = S, C, I, R, V, D)
