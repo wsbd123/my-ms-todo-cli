@@ -1473,9 +1473,12 @@ def main():
     # 先从任意位置提取并剥离 --json，使其在子命令前后皆可用，
     # 且仅匹配完整参数（避免任务标题/描述中的 "--json" 误触发）
     argv = sys.argv[1:]
-    if "--json" in argv:
+    # `--` 之后的一律视为字面值，不参与剥离：
+    # 否则 `task add -- --json`（标题就叫 "--json"）会被吃掉。
+    cut = argv.index("--") if "--" in argv else len(argv)
+    if "--json" in argv[:cut]:
         JSON_MODE = True
-        argv = [a for a in argv if a != "--json"]
+        argv = [a for a in argv[:cut] if a != "--json"] + argv[cut:]
 
     parser = argparse.ArgumentParser(
         description="Microsoft To Do CLI Harness (Agent-Native)",
@@ -1680,5 +1683,17 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    # 兜底：未预期异常若以 traceback 形式冒到 stdout/stderr，会破坏 --json 契约。
+    # SystemExit 继承自 BaseException，不会被这里拦住，output_error 的退出码照常生效。
+    try:
+        main()
+    except KeyboardInterrupt:
+        emit_error("interrupted", "已取消")
+        sys.exit(130)
+    except Exception as e:
+        if os.environ.get("MSTODO_DEBUG"):
+            raise
+        emit_error("internal_error", f"{type(e).__name__}: {e}",
+                   {"hint": "设置 MSTODO_DEBUG=1 可查看完整 traceback"})
+        sys.exit(1)
 
