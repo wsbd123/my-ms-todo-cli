@@ -468,25 +468,40 @@ def parse_datetime(s: str) -> datetime:
 
     raise ValueError(f"无法解析日期时间: {s}")
 
-def parse_recurrence(rec_str: str) -> Optional[Dict]:
-    """解析重复规则字符串"""
+WEEKDAY_NAMES = ["monday", "tuesday", "wednesday", "thursday",
+                 "friday", "saturday", "sunday"]
+
+def parse_recurrence(rec_str: str, base_dt=None) -> Optional[Dict]:
+    """解析重复规则字符串。
+
+    base_dt 是该任务的截止日期（datetime 或 date）；星期几 / 每月几号 /
+    每年几月以及 range.startDate 都从它推导。这些字段以前是硬编码的
+    （周一 / 1 号 / 1 月 1 日 / 今天），于是
+    `--due 2026-08-17 --recurrence monthly` 会生成「每月 1 号」，
+    与用户指定的截止日期互相矛盾。
+    """
     if not rec_str:
         return None
 
+    base = base_dt or datetime.now()
+    start_date = base.strftime("%Y-%m-%d")
+
     rec_str = rec_str.strip().lower()
 
-    # 基本模式
+    # 基本模式：周期锚点取自截止日期
     patterns = {
         "daily": {"type": "daily", "interval": 1},
-        "weekly": {"type": "weekly", "interval": 1, "daysOfWeek": ["monday"]},
-        "monthly": {"type": "absoluteMonthly", "interval": 1, "dayOfMonth": 1},
-        "yearly": {"type": "absoluteYearly", "interval": 1, "dayOfMonth": 1, "month": 1}
+        "weekly": {"type": "weekly", "interval": 1,
+                   "daysOfWeek": [WEEKDAY_NAMES[base.weekday()]]},
+        "monthly": {"type": "absoluteMonthly", "interval": 1, "dayOfMonth": base.day},
+        "yearly": {"type": "absoluteYearly", "interval": 1,
+                   "dayOfMonth": base.day, "month": base.month}
     }
 
     if rec_str in patterns:
         return {
             "pattern": patterns[rec_str],
-            "range": {"type": "noEnd", "startDate": datetime.now().strftime("%Y-%m-%d")}
+            "range": {"type": "noEnd", "startDate": start_date}
         }
 
     # weekly:周一,周三 或 weekly:mon,wed / monday,wednesday
@@ -498,7 +513,7 @@ def parse_recurrence(rec_str: str) -> Optional[Dict]:
             "mon": "monday", "tue": "tuesday", "wed": "wednesday", "thu": "thursday",
             "fri": "friday", "sat": "saturday", "sun": "sunday",
         }
-        valid = {"monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"}
+        valid = set(WEEKDAY_NAMES)
         days_en = []
         for d in days:
             en = day_map.get(d, d)
@@ -508,7 +523,7 @@ def parse_recurrence(rec_str: str) -> Optional[Dict]:
         if not days_en:
             return None
         return {"pattern": {"type": "weekly", "interval": 1, "daysOfWeek": days_en},
-                "range": {"type": "noEnd", "startDate": datetime.now().strftime("%Y-%m-%d")}}
+                "range": {"type": "noEnd", "startDate": start_date}}
 
     # monthly:17
     if rec_str.startswith("monthly:"):
@@ -519,7 +534,7 @@ def parse_recurrence(rec_str: str) -> Optional[Dict]:
         if not 1 <= day <= 31:
             return None
         return {"pattern": {"type": "absoluteMonthly", "interval": 1, "dayOfMonth": day},
-                "range": {"type": "noEnd", "startDate": datetime.now().strftime("%Y-%m-%d")}}
+                "range": {"type": "noEnd", "startDate": start_date}}
 
     # yearly:09-17
     if rec_str.startswith("yearly:"):
@@ -532,7 +547,7 @@ def parse_recurrence(rec_str: str) -> Optional[Dict]:
         if not (1 <= month <= 12 and 1 <= day <= 31):
             return None
         return {"pattern": {"type": "absoluteYearly", "interval": 1, "dayOfMonth": day, "month": month},
-                "range": {"type": "noEnd", "startDate": datetime.now().strftime("%Y-%m-%d")}}
+                "range": {"type": "noEnd", "startDate": start_date}}
 
     return None
 
@@ -703,7 +718,8 @@ def cmd_task_add(args, token):
     if args.importance:
         task_data["importance"] = args.importance
 
-    # 截止日期
+    # 截止日期（due_dt 同时用作重复规则的周期锚点）
+    due_dt = None
     if args.due:
         try:
             due_dt = parse_datetime(args.due)
@@ -732,12 +748,12 @@ def cmd_task_add(args, token):
 
     # 重复规则（Graph 要求重复任务必须带 dueDateTime）
     if args.recurrence:
-        recurrence = parse_recurrence(args.recurrence)
-        if not recurrence:
-            return output_error("invalid_recurrence", f"无效的重复规则: {args.recurrence}")
-        if "dueDateTime" not in task_data:
+        if due_dt is None:
             return output_error("recurrence_requires_due",
                                 "重复任务必须同时指定 --due 截止日期")
+        recurrence = parse_recurrence(args.recurrence, due_dt)
+        if not recurrence:
+            return output_error("invalid_recurrence", f"无效的重复规则: {args.recurrence}")
         task_data["recurrence"] = recurrence
 
     result = api(token, "POST", f"/me/todo/lists/{lst['id']}/tasks", task_data)
@@ -988,7 +1004,18 @@ def cmd_task_update(args, token):
         update_data["categories"] = [] if cats.lower() in _CLEAR else [c.strip() for c in cats.split(",")]
 
     if getattr(args, "recurrence", None):
-        recurrence = parse_recurrence(args.recurrence)
+        # 周期锚点：本次若设了截止日期就用它，否则用任务现有的截止日期。
+        # 本次显式清空 due（--due none）时 update_data["dueDateTime"] 为 None，
+        # 不能回退到旧值，否则重复规则会挂在一个已被删掉的日期上。
+        if "dueDateTime" in update_data:
+            due_src = update_data["dueDateTime"]
+        else:
+            due_src = current.get("dueDateTime")
+        rec_base = _graph_utc_to_local_date(due_src.get("dateTime")) if due_src else None
+        if rec_base is None:
+            return output_error("recurrence_requires_due",
+                                "重复任务必须有截止日期，请同时指定 --due")
+        recurrence = parse_recurrence(args.recurrence, rec_base)
         if recurrence is None:
             return output_error("invalid_recurrence", f"无效的重复规则: {args.recurrence}")
         update_data["recurrence"] = recurrence
