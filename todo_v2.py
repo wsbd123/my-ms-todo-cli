@@ -36,8 +36,8 @@ Microsoft To Do CLI Harness - Agent-Native Interface
   todo task delete <task-id> --json
 
   # 批量操作
-  todo task complete-all --filter "关键词" --json
-  todo task delete-all --filter "关键词" --yes --json
+  todo task complete-all --match "关键词" --json
+  todo task delete-all --match "关键词" --yes --json
 
   # 状态和同步
   todo status --json

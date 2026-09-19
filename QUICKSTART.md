@@ -98,11 +98,11 @@ python todo_v2.py list-delete "列表名" --yes --json
 
 ```bash
 # 批量完成包含"测试"的任务
-python todo_v2.py task complete-all --filter "测试" --yes --json
+python todo_v2.py task complete-all --match "测试" --yes --json
 
 # 批量删除已完成任务
 python todo_v2.py task list --filter completed --json  # 先查看
-python todo_v2.py task delete-all --filter "..." --yes --json
+python todo_v2.py task delete-all --match "..." --yes --json
 ```
 
 ---
@@ -232,7 +232,7 @@ done
 
 ✅ **推荐**:
 ```bash
-python todo_v2.py task complete-all --filter "关键词" --yes --json
+python todo_v2.py task complete-all --match "关键词" --yes --json
 ```
 
 ### 3. 使用 jq 处理 JSON

@@ -157,10 +157,10 @@ mstodo list-delete "List Name" --yes
 
 ```bash
 # Complete all incomplete tasks whose title contains "test"
-mstodo task complete-all --filter "test" --yes
+mstodo task complete-all --match "test" --yes
 
 # Delete all tasks whose title contains "draft"
-mstodo task delete-all --filter "draft" --yes
+mstodo task delete-all --match "draft" --yes
 ```
 
 > `--filter` here matches a substring of the task **title** (not a status).

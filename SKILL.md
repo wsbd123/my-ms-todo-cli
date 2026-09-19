@@ -127,11 +127,11 @@ python todo_v2.py task delete <task-id> --json
 
 ```bash
 # 批量完成包含关键词的任务
-python todo_v2.py task complete-all --filter "测试" --yes --json
+python todo_v2.py task complete-all --match "测试" --yes --json
 # → {"completed": 5, "total": 5}
 
 # 批量删除匹配的任务
-python todo_v2.py task delete-all --filter "临时" --yes --json
+python todo_v2.py task delete-all --match "临时" --yes --json
 # → {"deleted": 3, "total": 3}
 
 # 完成所有未完成任务（需确认）
