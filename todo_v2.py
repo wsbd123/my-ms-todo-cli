@@ -1131,8 +1131,29 @@ def cmd_task_delete(args, token):
 # 批量操作
 # ═══════════════════════════════════════════════════════════════════════════════
 
+def _resolve_match(args) -> Optional[str]:
+    """取批量命令的标题匹配关键词。
+
+    `--filter` 在 `task list` 里是枚举语义（incomplete/completed/today/…），
+    在批量命令里却是标题子串匹配。同名不同义会让
+    `task delete-all --filter completed` 读起来像「删除已完成的任务」，
+    实际删掉的是「标题里含 completed 的任务」。批量命令因此改用 `--match`；
+    旧的 `--filter` 保留识别但直接报错，不再静默按子串匹配。
+    """
+    legacy = getattr(args, "legacy_filter", None)
+    if legacy is not None:
+        output_error(
+            "filter_renamed",
+            f"批量命令的 --filter 已更名为 --match（按标题子串匹配），"
+            f"以免与 `task list --filter` 的枚举语义混淆。"
+            f"请改用: --match \"{legacy}\""
+        )
+    return getattr(args, "match", None)
+
 def cmd_task_complete_all(args, token):
     """批量完成任务"""
+    match = _resolve_match(args)
+
     lst = get_list_by_name(token, args.list)
     if not lst:
         return output_error("list_not_found", f"未找到列表「{args.list}」")
@@ -1144,11 +1165,10 @@ def cmd_task_complete_all(args, token):
     tasks = tasks_data.get("value", [])
 
     # 过滤
-    if args.filter:
-        keyword = args.filter.lower()
-        tasks = [t for t in tasks if keyword in t["title"].lower() and t.get("status") != "completed"]
-    else:
-        tasks = [t for t in tasks if t.get("status") != "completed"]
+    tasks = [t for t in tasks if t.get("status") != "completed"]
+    if match:
+        keyword = match.lower()
+        tasks = [t for t in tasks if keyword in t.get("title", "").lower()]
 
     if not tasks:
         return output_json({"count": 0, "message": "无匹配的未完成任务"}, "无匹配的未完成任务")
@@ -1188,6 +1208,19 @@ def cmd_task_complete_all(args, token):
 
 def cmd_task_delete_all(args, token):
     """批量删除任务"""
+    match = _resolve_match(args)
+
+    # 此前 --filter 是可选的，缺省即「全选」：`task delete-all --yes`
+    # 会清空整个列表，且批量删除不记 undo、无法恢复。
+    # 现在要求显式限定范围，或用 --all 明确表示确实要清空。
+    if not match and not getattr(args, "all", False):
+        return output_error(
+            "scope_required",
+            "delete-all 会删除列表内全部任务，且批量删除不可撤销。"
+            "请用 --match \"<关键词>\" 限定范围，"
+            "或显式加 --all 表示确实要清空整个列表。"
+        )
+
     lst = get_list_by_name(token, args.list)
     if not lst:
         return output_error("list_not_found", f"未找到列表「{args.list}」")
@@ -1199,9 +1232,9 @@ def cmd_task_delete_all(args, token):
     tasks = tasks_data.get("value", [])
 
     # 过滤
-    if args.filter:
-        keyword = args.filter.lower()
-        tasks = [t for t in tasks if keyword in t["title"].lower()]
+    if match:
+        keyword = match.lower()
+        tasks = [t for t in tasks if keyword in t.get("title", "").lower()]
 
     if not tasks:
         return output_json({"count": 0, "message": "无匹配的任务"}, "无匹配的任务")
@@ -1623,14 +1656,20 @@ def main():
     p.add_argument("--list", "-l", default="Tasks", help="列表名称")
 
     # task complete-all
+    # 注意：这里是 --match（标题子串），不是 task list 的 --filter（枚举）。
+    # 旧的 --filter/-f 仍被识别，但会报错提示改名，避免语义静默漂移。
     p = task_sub.add_parser("complete-all", help="批量完成任务")
-    p.add_argument("--filter", "-f", help="关键词过滤")
+    p.add_argument("--match", "-m", help="按标题子串匹配（缺省为全部未完成任务）")
+    p.add_argument("--filter", "-f", dest="legacy_filter", help=argparse.SUPPRESS)
     p.add_argument("--list", "-l", default="Tasks", help="列表名称")
     p.add_argument("--yes", "-y", action="store_true", help="跳过确认")
 
     # task delete-all
     p = task_sub.add_parser("delete-all", help="批量删除任务")
-    p.add_argument("--filter", "-f", help="关键词过滤")
+    p.add_argument("--match", "-m", help="按标题子串匹配")
+    p.add_argument("--filter", "-f", dest="legacy_filter", help=argparse.SUPPRESS)
+    p.add_argument("--all", action="store_true",
+                   help="确实要删除列表内全部任务（与 --match 二选一）")
     p.add_argument("--list", "-l", default="Tasks", help="列表名称")
     p.add_argument("--yes", "-y", action="store_true", help="跳过确认")
 
